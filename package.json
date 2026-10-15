@@ -1,0 +1,24 @@
+{
+  "name": "lovense-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Stateless MCP 2026-07-28 server for controlling Lovense toys (tested on Vulse), running on Cloudflare Workers",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "wrangler": "^4.42.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "workerd@1.20260801.1": true
+  }
+}

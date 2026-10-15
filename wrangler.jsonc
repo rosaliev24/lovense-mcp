@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lovense-mcp",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-01",
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    // Identifies this "user" to Lovense. Any stable string works; changing it
+    // invalidates existing pairings, so pick one and leave it alone.
+    "LOVENSE_UID": "claude-mcp",
+
+    // Comma-separated Origin allowlist for browser clients. Empty means "any
+    // https origin"; native clients send no Origin and are always allowed.
+    "ALLOWED_ORIGINS": ""
+  }
+
+  // Secrets — set these with `npx wrangler secret put <NAME>`, never here:
+  //   LOVENSE_TOKEN         your Lovense developer token
+  //   MCP_ACCESS_KEY        the key that guards the MCP endpoint
+  //   LOVENSE_UTOKEN_SECRET optional; defaults to LOVENSE_TOKEN
+}

@@ -1,0 +1,5 @@
+# Copy to `.dev.vars` for local `wrangler dev` runs. Never commit `.dev.vars`.
+# In production these are set with `npx wrangler secret put <NAME>` instead.
+
+LOVENSE_TOKEN="your-lovense-developer-token"
+MCP_ACCESS_KEY="a-long-random-string"
