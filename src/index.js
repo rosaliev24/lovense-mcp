@@ -136,7 +136,15 @@ async function handleMcp(request, pathKey, env) {
   }
 
   const id = message?.id;
-  const isNotification = id === undefined || id === null;
+  // Decide by method name, the same way the protocol layer does. Treating any
+  // id-less message as a notification would run a tools/call against the toy
+  // and then hide its result behind a bare 202.
+  const isNotification = typeof message?.method === 'string' && message.method.startsWith('notifications/');
+  if (typeof message?.method === 'string' && !isNotification && (id === undefined || id === null)) {
+    return jsonRpcError(null, ERROR_CODES.INVALID_REQUEST, 'Requests must carry a non-null id', {
+      status: 400,
+    });
+  }
 
   try {
     const result = await dispatch(request.headers, message, env);

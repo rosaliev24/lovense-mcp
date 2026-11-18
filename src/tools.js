@@ -27,6 +27,16 @@ import {
 
 const MAX_DURATION_SEC = 3600;
 
+/**
+ * Used when the caller gives no duration. A finite default means a dropped
+ * conversation or a failed turn cannot leave the toy running forever; callers
+ * who want that pass 0 explicitly.
+ */
+export const DEFAULT_DURATION_SEC = 300;
+
+/** Lovense accepts timeSec 0 (indefinite) or a value greater than 1. */
+const MIN_DURATION_SEC = 2;
+
 const TOY_PROPERTY = {
   type: 'string',
   description: 'Optional Lovense toy ID to target a single toy. Omit to address every connected toy.',
@@ -36,9 +46,12 @@ const DURATION_PROPERTY = {
   type: 'integer',
   minimum: 0,
   maximum: MAX_DURATION_SEC,
-  default: 0,
+  default: DEFAULT_DURATION_SEC,
   description:
-    'How long to run, in seconds. 0 means run indefinitely until lovense_stop is called. Maximum 3600.',
+    `How long to run, in seconds. Defaults to ${DEFAULT_DURATION_SEC} (5 minutes) when omitted. ` +
+    'Pass 0 to run indefinitely until lovense_stop is called. ' +
+    `Values below ${MIN_DURATION_SEC} are raised to ${MIN_DURATION_SEC} (Lovense requires 0 or more than 1 second). ` +
+    `Maximum ${MAX_DURATION_SEC}.`,
 };
 
 const FUNCTION_PROPERTY = {
@@ -199,12 +212,22 @@ function describeDuration(durationSec) {
   return durationSec > 0 ? `for ${durationSec}s` : 'until stopped';
 }
 
-/** @param {unknown} value */
+/**
+ * Turn a requested duration into a timeSec Lovense will accept.
+ *
+ * Only an explicit 0 means "run until stopped". Anything missing or unusable
+ * falls back to the finite default rather than to indefinite, and small
+ * positive values (including fractions that would round to 0) are raised to
+ * the Lovense minimum instead of silently becoming "forever".
+ *
+ * @param {unknown} value
+ */
 function clampDuration(value) {
-  if (value === undefined || value === null) return 0;
+  if (value === undefined || value === null || value === '') return DEFAULT_DURATION_SEC;
   const n = Number(value);
-  if (!Number.isFinite(n) || n < 0) return 0;
-  return Math.min(MAX_DURATION_SEC, Math.round(n));
+  if (!Number.isFinite(n) || n < 0) return DEFAULT_DURATION_SEC;
+  if (n === 0) return 0;
+  return Math.min(MAX_DURATION_SEC, Math.max(MIN_DURATION_SEC, Math.round(n)));
 }
 
 /**

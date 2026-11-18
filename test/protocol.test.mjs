@@ -173,6 +173,34 @@ describe('transport', () => {
     assert.equal(response.status, 202);
     assert.equal(await response.text(), '');
   });
+
+  it('rejects a tools/call without an id instead of running it as a notification', async () => {
+    const calls = captureLovense();
+    const { response, json } = await send(
+      modernRequest('tools/call', { name: 'lovense_vibrate', arguments: { strength: 5 } }, { id: null }),
+    );
+    assert.equal(response.status, 400);
+    assert.equal(json.error.code, -32600);
+    assert.equal(calls.length, 0, 'an id-less request must not drive the toy');
+  });
+
+  it('rejects a request whose id is null', async () => {
+    const calls = captureLovense();
+    const request = new Request(ENDPOINT, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: null,
+        method: 'tools/call',
+        params: { name: 'lovense_vibrate', arguments: { strength: 5 } },
+      }),
+    });
+    const { response, json } = await send(request);
+    assert.equal(response.status, 400);
+    assert.equal(json.error.code, -32600);
+    assert.equal(calls.length, 0);
+  });
 });
 
 describe('header/body validation (SEP-2243)', () => {
@@ -221,6 +249,54 @@ describe('header/body validation (SEP-2243)', () => {
       modernRequest('tools/call', { name: 'lovense_stop', arguments: {} }, { headers: { 'mcp-name': encoded } }),
     );
     assert.equal(response.status, 200);
+  });
+
+  it('rejects a header version that disagrees with a legacy body version', async () => {
+    // Before the fix, the legacy body version won, so every 2026-07-28 header
+    // check was skipped and this lying Mcp-Name / Mcp-Method went through.
+    const calls = captureLovense();
+    const request = new Request(ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'mcp-protocol-version': VERSION,
+        'mcp-method': 'tools/list',
+        'mcp-name': 'lovense_stop',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'lovense_vibrate',
+          arguments: { strength: 5 },
+          _meta: { 'io.modelcontextprotocol/protocolVersion': '2025-06-18' },
+        },
+      }),
+    });
+    const { response, json } = await send(request);
+    assert.equal(response.status, 400);
+    assert.equal(json.error.code, -32020);
+    assert.match(json.error.message, /MCP-Protocol-Version/);
+    assert.equal(calls.length, 0);
+  });
+
+  it('still lets a legacy client call tools with only the version header', async () => {
+    const calls = captureLovense();
+    const request = new Request(ENDPOINT, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'mcp-protocol-version': '2025-06-18' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'lovense_stop', arguments: {} },
+      }),
+    });
+    const { response, json } = await send(request);
+    assert.equal(response.status, 200);
+    assert.equal(json.result.isError, false);
+    assert.equal(calls[0].body.action, 'Stop');
   });
 
   it('rejects a request whose _meta omits clientCapabilities', async () => {
@@ -369,7 +445,44 @@ describe('device control', () => {
     const calls = captureLovense();
     await callTool('lovense_vibrate', { strength: 7 });
     assert.equal(calls[0].body.action, 'Vibrate:7');
+  });
+
+  it('defaults to a five-minute run when no duration is given', async () => {
+    const calls = captureLovense();
+    const { json } = await callTool('lovense_vibrate', { strength: 7 });
+    assert.equal(calls[0].body.timeSec, 300);
+    assert.match(json.result.content[0].text, /for 300s/);
+  });
+
+  it('advertises the default duration in the tool schema', async () => {
+    const { json } = await send(modernRequest('tools/list'));
+    const vibrate = json.result.tools.find((tool) => tool.name === 'lovense_vibrate');
+    assert.equal(vibrate.inputSchema.properties.duration_sec.default, 300);
+  });
+
+  it('runs indefinitely only when duration_sec is explicitly 0', async () => {
+    const calls = captureLovense();
+    const { json } = await callTool('lovense_vibrate', { strength: 7, duration_sec: 0 });
     assert.equal(calls[0].body.timeSec, 0);
+    assert.match(json.result.content[0].text, /until stopped/);
+  });
+
+  it('raises a one-second duration to the Lovense minimum of two', async () => {
+    const calls = captureLovense();
+    await callTool('lovense_vibrate', { strength: 7, duration_sec: 1 });
+    assert.equal(calls[0].body.timeSec, 2);
+  });
+
+  it('does not let a fractional duration round down to indefinite', async () => {
+    const calls = captureLovense();
+    await callTool('lovense_vibrate', { strength: 7, duration_sec: 0.3 });
+    assert.equal(calls[0].body.timeSec, 2);
+  });
+
+  it('falls back to the default, not to indefinite, for a negative duration', async () => {
+    const calls = captureLovense();
+    await callTool('lovense_vibrate', { strength: 7, duration_sec: -5 });
+    assert.equal(calls[0].body.timeSec, 300);
   });
 
   it('sends Stop', async () => {
@@ -418,6 +531,12 @@ describe('patterns', () => {
     assert.equal(calls[0].body.rule, 'V:1;F:v;S:900#');
     assert.equal(calls[0].body.strength, '4;7;11;15;18;20;18;15;11;7;4;3');
     assert.equal(calls[0].body.timeSec, 120);
+  });
+
+  it('applies the default duration to presets too', async () => {
+    const calls = captureLovense();
+    await callTool('lovense_pattern', { preset: 'pulse' });
+    assert.equal(calls[0].body.timeSec, 300);
   });
 
   it('can still target the thrusting channel explicitly', async () => {
