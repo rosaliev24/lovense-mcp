@@ -263,9 +263,20 @@ export async function dispatch(headers, message, env) {
     throw new RpcError(ERROR_CODES.INVALID_REQUEST, 'Request must be a JSON-RPC 2.0 message with a method');
   }
 
-  const { version } = resolveProtocolVersion(headers, message);
+  const { fromBody, fromHeader, version } = resolveProtocolVersion(headers, message);
   const isNotification = message.method.startsWith('notifications/');
   const isLegacyHandshake = message.method === 'initialize';
+
+  // A request that states two different versions is ambiguous: an
+  // intermediary may route on the header while we would execute under the
+  // body. Reject it before picking an era, otherwise a legacy version in the
+  // body would skip the strict 2026-07-28 header checks below.
+  if (fromBody && fromHeader && fromBody !== fromHeader) {
+    throw new RpcError(
+      ERROR_CODES.HEADER_MISMATCH,
+      `Header mismatch: MCP-Protocol-Version header value '${fromHeader}' does not match body value '${fromBody}'`,
+    );
+  }
 
   // A request that names a version we do not implement is rejected outright,
   // with the list the client should retry from.

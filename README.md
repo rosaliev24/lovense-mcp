@@ -50,14 +50,16 @@ Once the connector is attached, Claude sees 6 tools. You speak normally; Claude 
 
 | Tool | What it does | Main arguments |
 | --- | --- | --- |
-| `lovense_pair_qr` | Generate a pairing QR code to scan with Lovense Remote | none |
+| `lovense_pair_qr` | Generate a pairing QR code to scan with Lovense Remote | optional nickname shown in the app |
 | `lovense_vibrate` | Set vibration intensity | intensity 0–20, duration in seconds |
 | `lovense_thrust` | Set thrusting speed (thrusting toys) | intensity 0–20, duration in seconds |
 | `lovense_pattern` | Play a built-in pattern preset | preset name, duration |
-| `lovense_custom_pattern` | Play a custom intensity sequence | intensity list, interval |
-| `lovense_stop` | Stop everything immediately | none |
+| `lovense_custom_pattern` | Play a custom intensity sequence | intensity list, interval, duration |
+| `lovense_stop` | Stop everything immediately | optional toy ID |
 
 Patterns run on the Vibrate channel by default; thrusting toys can pass `function: "thrusting"`. Preset names and exact argument schemas are defined in `src/tools.js`.
+
+**Duration:** if no duration is given, a command runs for 5 minutes and then stops on its own, so a dropped conversation cannot leave the toy running. A duration of `0` means "run until `lovense_stop`". Lovense rejects a 1-second duration, so anything below 2 seconds is raised to 2. The maximum is one hour.
 
 ## Tested device: Lovense Vulse
 
@@ -174,9 +176,10 @@ Examples:
 - "Vibrate at 8 for 30 seconds"
 - "Play one of the presets"
 - "Ramp up from 3 to 15, five seconds per step"
+- "Keep it on until I say stop" (sends duration 0)
 - "Stop"
 
-Claude picks the tool and fills in the arguments. Start low (around 3) for a few seconds the first time.
+Claude picks the tool and fills in the arguments. Without a stated duration, each command stops by itself after 5 minutes. Start low (around 3) for a few seconds the first time.
 
 Keep in mind:
 
